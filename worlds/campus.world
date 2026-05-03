@@ -1,0 +1,223 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="campus_world">
+    <include><uri>model://sun</uri></include>
+    <include><uri>model://ground_plane</uri></include>
+
+    <!-- gazebo_ros 플러그인 추가 -->
+    <plugin name="gazebo_ros_factory" filename="libgazebo_ros_factory.so"/>
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so"/>
+
+    <model name="building_A">
+      <static>true</static>
+      <pose>15 15 2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 6 4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 6 4</size></box></geometry>
+          <material><ambient>0.8 0.6 0.4 1</ambient><diffuse>0.8 0.6 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="building_B">
+      <static>true</static>
+      <pose>-15 15 2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 6 4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 6 4</size></box></geometry>
+          <material><ambient>0.6 0.7 0.8 1</ambient><diffuse>0.6 0.7 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="building_C">
+      <static>true</static>
+      <pose>0 -15 2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 6 4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 6 4</size></box></geometry>
+          <material><ambient>0.7 0.8 0.6 1</ambient><diffuse>0.7 0.8 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="building_D">
+      <static>true</static>
+      <pose>15 -15 2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 6 4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 6 4</size></box></geometry>
+          <material><ambient>0.8 0.5 0.5 1</ambient><diffuse>0.8 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="delivery_point_1">
+      <static>true</static>
+      <pose>12 10 0.05 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.8 0.8 0.1</size></box></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="delivery_point_2">
+      <static>true</static>
+      <pose>-12 10 0.05 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.8 0.8 0.1</size></box></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="charging_station">
+      <static>true</static>
+      <pose>0 0 0.05 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>1.0 1.0 0.1</size></box></geometry>
+          <material><ambient>1 1 0 1</ambient><diffuse>1 1 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <actor name="pedestrian_1">
+      <skin>
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walking">
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>0</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+          <waypoint><time>0</time><pose>-8 3 0 0 0 0</pose></waypoint>
+          <waypoint><time>4</time><pose>3 7 0 0 0 0</pose></waypoint>
+          <waypoint><time>9</time><pose>10 -2 0 0 0 0</pose></waypoint>
+          <waypoint><time>14</time><pose>2 -9 0 0 0 0</pose></waypoint>
+          <waypoint><time>19</time><pose>-7 -4 0 0 0 0</pose></waypoint>
+          <waypoint><time>24</time><pose>-8 3 0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <actor name="pedestrian_2">
+      <skin>
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walking">
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>2</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+          <waypoint><time>0</time><pose>5 -5 0 0 0 0</pose></waypoint>
+          <waypoint><time>5</time><pose>-4 2 0 0 0 0</pose></waypoint>
+          <waypoint><time>9</time><pose>8 8 0 0 0 0</pose></waypoint>
+          <waypoint><time>14</time><pose>-6 6 0 0 0 0</pose></waypoint>
+          <waypoint><time>18</time><pose>1 -8 0 0 0 0</pose></waypoint>
+          <waypoint><time>23</time><pose>5 -5 0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <actor name="pedestrian_3">
+      <skin>
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walking">
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>1</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+          <waypoint><time>0</time><pose>-3 -3 0 0 0 0</pose></waypoint>
+          <waypoint><time>5</time><pose>6 -6 0 0 0 0</pose></waypoint>
+          <waypoint><time>10</time><pose>-5 5 0 0 0 0</pose></waypoint>
+          <waypoint><time>15</time><pose>7 3 0 0 0 0</pose></waypoint>
+          <waypoint><time>20</time><pose>-3 -3 0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <actor name="pedestrian_4">
+      <skin>
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walking">
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>3</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+          <waypoint><time>0</time><pose>-10 0 0 0 0 0</pose></waypoint>
+          <waypoint><time>6</time><pose>-3 10 0 0 0 0</pose></waypoint>
+          <waypoint><time>12</time><pose>9 5 0 0 0 0</pose></waypoint>
+          <waypoint><time>18</time><pose>8 -8 0 0 0 0</pose></waypoint>
+          <waypoint><time>24</time><pose>-10 0 0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <actor name="pedestrian_5">
+      <skin>
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walking">
+        <filename>/usr/share/gazebo-11/media/models/walk.dae</filename>
+        <scale>1.0</scale>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>4</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walking">
+          <waypoint><time>0</time><pose>10 8 0 0 0 0</pose></waypoint>
+          <waypoint><time>5</time><pose>-9 7 0 0 0 0</pose></waypoint>
+          <waypoint><time>10</time><pose>-2 4 0 0 0 0</pose></waypoint>
+          <waypoint><time>15</time><pose>6 -3 0 0 0 0</pose></waypoint>
+          <waypoint><time>20</time><pose>10 8 0 0 0 0</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+  </world>
+</sdf>
