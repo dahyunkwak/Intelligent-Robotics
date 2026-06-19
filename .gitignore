@@ -16,3 +16,4 @@ log/
 # OS/IDE
 .vscode/
 .DS_Store
+*.mp4
