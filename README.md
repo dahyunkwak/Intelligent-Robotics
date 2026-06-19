@@ -1,52 +1,99 @@
-## Intelligent-Robotics
-26-1 
-## Campus Delivery Robot with Reinforcement Learning
-이 프로젝트는 WSL2 환경에서 ROS2 Humble과 Gazebo를 활용하여 캠퍼스 내 보행자와 배터리 상태를 고려해 최적의 의사결정을 내리는 자율주행 배달 로봇 시스템을 설계합니다.
-# 1. 프로젝트 개요
-주제: 캠퍼스 환경에서 보행자와 배터리 상태를 실시간으로 판단하여 배달 상황을 결정하는 강화학습 기반 자율주행 로봇 시스템
-목표:
-안정성: 보행자와의 충돌 회피 및 안전 거리 유지
-효율성: 목표 배달지까지의 신속한 이동
-지속성: 실시간 배터리 상태를 고려한 전략적 충전 및 운용
-# 2. 시스템 아키텍처
-강화학습(PPO) 기반의 고수준 의사결정과 기존 Navigation 시스템(Nav2)을 결합한 계층적 구조로 설계되었습니다.
-구성 요소
-역할
- 
-Gazebo
-캠퍼스 환경 및 보행자(Actor) 시뮬레이션
-ROS2 Humble
-로봇 상태 및 센서 데이터 처리 미들웨어
-Gymnasium
-강화학습 환경 인터페이스(Gym Wrapper) 구성
-RL Agent (PPO)
-배달 지속 여부 또는 충전소 이동 결정 (High-level Decision)
-Nav2
-에이전트가 결정한 목표지까지의 경로 계획 및 실시간 주행
-RViz Marker
-로봇 상단 배터리 상태 실시간 시각화
+# 캠퍼스 배달 로봇 강화학습 시스템
 
-# 3. 강화학습 설계
-3.1 상태 (State)
-로봇의 현재 위치 및 목표 위치 (Pose)
-Gazebo Actor 기반 보행자의 위치 (Ground-truth)
-로봇의 이동 속도 및 현재 배터리 잔량
-3.2 행동 (Action)
-Action 0: 배달 지속 (Continue Delivery)
-Action 1: 충전소 이동 (Go to Charging Station)
-3.3 보상 함수 (Reward Function)
-배달 측면: 성공 시 (+) 보상, 이동 스텝마다 소량의 (-) 보상 (최단 경로 유도)
-안전 측면: 보행자 근접 시 큰 (-) 페널티, 밀집 지역 진입 시 위험 가중치 부여
-지속성 측면: 배터리 방전 시 큰 (-) 페널티, 충전소 도달 및 충전 시 (+) 보상
-# 4. 구현 과정
-ROS2 및 Gazebo 기반 캠퍼스 시뮬레이션 환경 구축
-Gazebo Actor를 활용한 보행자 생성 및 위치 데이터 추출
-Gymnasium 기반 강화학습 환경 구축 및 MDP 정의
-배터리 소모/회복 로직 구현 및 RViz 마커 연동
-Stable Baselines3의 PPO 알고리즘을 활용한 정책 학습
-학습된 에이전트와 Nav2 시스템 통합 테스트
+## 팀 정보
 
-# 5. 참고 자료
-ROS2 Navigation (Nav2): https://docs.nav2.org/
-Proximal Policy Optimization (PPO): https://arxiv.org/abs/1707.06347
-Gymnasium: https://gymnasium.farama.org/
+| 항목 | 내용 |
+|------|------|
+| 팀명 | 코코넛 |
+| 팀원 | 곽다현 |
+
+---
+
+## 프로젝트 설명
+
+ROS2 + Nav2 + Gazebo 환경에서 TurtleBot3 Burger 로봇이 캠퍼스 내 여러 건물에 물품을 배달하는 강화학습 시스템
+
+MaskablePPO 알고리즘을 사용해 배달 순서 결정, 배터리 관리, 충전 전략을 스스로 학습하며, 규칙 기반(Rule-Based) 에이전트와 성능을 비교
+
+### 주요 기능
+- 캠퍼스 맵 기반 자율 배달 (최대 6개 배달지)
+- 정문에서 캠퍼스 내부 건물 두개를 랜덤으로 입력받아 배달 수행
+- 배터리 상태에 따른 자율 충전 전략 학습
+- Action Masking으로 불가능한 행동 제거
+- AMCL 대신 Gazebo ground-truth 위치 사용 (`gt_pose_publisher` 노드 직접 구현)
+- 3가지 환경 버전 비교 (v1/v2/v3)
+
+### 환경 버전
+| 버전 | 배달지 | 충전소 위치 | 학습 스텝 |
+|------|--------|-------------|-----------|
+| V1 | 4개 (ECC, 대강당, 학관, 중앙도서관) | 캠퍼스 중앙 (0, 0) | ~7,271 |
+| V2 | 6개 (+연구협력관, 조형예술관) | 캠퍼스 중앙 (0, 0) | ~9,474 |
+| V3 | 4개 (V1과 동일) | 맵 외딴곳 (16, -20) | 진행 중 |
+
+### 평가 결과 (각 10에피소드)
+| 지표 | V1 RL | V1 Rule | V2 RL | V2 Rule | V3 RL | V3 Rule |
+|------|-------|---------|-------|---------|-------|---------|
+| 평균 배달 수 | **15.8** | 11.0 | **16.2** | 15.3 | **15.6** | 14.8 |
+| 최대 배달 수 | 16 | 17 | 17 | 17 | 16 | 16 |
+| 최소 배달 수 | **14** | 5 | **16** | 14 | 14 | 14 |
+| 배터리 방전 | **0회** | 1회 | **0회** | 0회 | **0회** | 0회 |
+| 불필요한 충전 | 31회 | 0회 | 25회 | 0회 | 24회 | 0회 |
+
+---
+
+## 기술 스택
+
+- **ROS2 Humble** - 미들웨어
+- **Gazebo** - 시뮬레이터
+- **Nav2** - 자율주행 (경로 계획 및 이동 제어)
+- **TurtleBot3 Burger** - 로봇 플랫폼
+- **Gymnasium** - RL 환경 인터페이스
+- **Stable Baselines3 + sb3_contrib** - MaskablePPO 구현
+- **WSL2 (Ubuntu 22.04)** - 개발 환경
+
+---
+
+## AI 사용 여부 및 사용 내용
+
+본 프로젝트에서 AI 도구(Claude)를 다음 용도로 활용하였습니다.
+
+- **코드 작성 보조**: `campus_env.py`, `gt_pose_publisher.py`, `train_ppo.py` 등 코드 디버깅 및 ROS2/Nav2 관련 오류 해결 보조
+- 발표 자료 초안 작성
+- **ROS2/Nav2 설정 튜닝**: WSL2 환경에서의 타임아웃, goal tolerance 등 파라미터 조정
+- **발표 자료 초안 제작**: PPT 디자인 제작
+
+AI가 생성한 코드를 직접 검토하고 수정하며 프로젝트에 적용하였으며, 실제 학습 실행 및 결과 분석은 직접 수행하였습니다.
+
+---
+
+## 참고 자료
+
+### 논문
+- Schulman, J. et al. (2017). *Proximal Policy Optimization Algorithms*. arXiv:1707.06347
+- Hill, A. et al. (2018). *Stable Baselines*. GitHub
+
+### GitHub
+- [Stable Baselines3](https://github.com/DLR-RM/stable-baselines3)
+- [sb3-contrib (MaskablePPO)](https://github.com/Stable-Baselines-Team/stable-baselines3-contrib)
+- [Nav2 (Navigation2)](https://github.com/ros-planning/navigation2)
+- [TurtleBot3](https://github.com/ROBOTIS-GIT/turtlebot3)
+
+### 공식 문서
+- [ROS2 Humble Documentation](https://docs.ros.org/en/humble/)
+- [Nav2 Documentation](https://navigation.ros.org/)
+- [Gymnasium Documentation](https://gymnasium.farama.org/)
+
+---
+
+## 데모 영상
+
+- **발표용 (배속)**: https://www.youtube.com/watch?v=G489RXDn_80
+- **원본 영상 (V1)**:https://www.youtube.com/watch?v=R-MX-UMStyE
+- **원본 영상 (V2)**:https://www.youtube.com/watch?v=DhYFsUyQcTk&si=iAEjJYdm5g3PQCa-
+- **원본 영상 (V3)**: https://www.youtube.com/watch?v=85ZynsHOxpA&si=1jrpD2FzRyUWfYik
+
+---
+
+## 계획과 달라진 점
+- 계획할 때는 배터리 상태를 RVIZ로 시각화하려고 하였으나 제 프로젝트 주제에서 시각화가 크게 중요하지 않다고 판단되었고 시각화 과정을 추가했을 때 강화학습이 원활이 수행되지 않아 터미널을 통해 배터리 상태를 확인 하는 것으로 교체하였습니다. 
+- 보행자 인식 역시 처음에는 ground-truth 위치를 직접 받아오는 방식을 고려했으나, 실제 로봇 환경과의 일관성을 위해 LiDAR 기반 Nav2의 obstacle_layer를 활용해 보행자를 감지하고 회피하는 방식으로 변경하였습니다.
