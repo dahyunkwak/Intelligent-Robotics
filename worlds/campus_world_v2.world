@@ -109,7 +109,37 @@
       </link>
     </model>
 
-    <!-- 충전소 (캠퍼스 중앙 — 모든 건물과 균등 거리) -->
+    <!-- 연구협력관 (북쪽 중앙) -->
+    <model name="research_cooperation">
+      <static>true</static>
+      <pose>0 16 2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 9 5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 9 5</size></box></geometry>
+          <material><ambient>0.7 0.4 0.6 1</ambient><diffuse>0.7 0.4 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- 조형예술관 (동남쪽) -->
+    <model name="art_building">
+      <static>true</static>
+      <pose>20 -14 2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 8 5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 8 5</size></box></geometry>
+          <material><ambient>0.85 0.5 0.3 1</ambient><diffuse>0.85 0.5 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- 충전소 (캠퍼스 중앙) -->
     <model name="charging_station">
       <static>true</static>
       <pose>0 0 0.05 0 0 0</pose>

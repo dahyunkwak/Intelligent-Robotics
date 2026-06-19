@@ -3,7 +3,7 @@ from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
-from campus_delivery_robot.campus_env import CampusEnv
+from campus_delivery_robot.campus_env_v2 import CampusEnvV2
 
 
 class DeliveryLogCallback(BaseCallback):
@@ -15,7 +15,6 @@ class DeliveryLogCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         info = self.locals.get("infos", [{}])[0]
-        # VecEnv는 에피소드 종료 시 'terminal_observation'과 함께 final_info를 담음
         if "total_delivered" in info:
             self._ep_delivered = info["total_delivered"]
         if self.locals.get("dones", [False])[0]:
@@ -28,20 +27,20 @@ class DeliveryLogCallback(BaseCallback):
 #  하이퍼파라미터
 # ─────────────────────────────────────────────────────────────
 CFG = dict(
-    total_timesteps = 20_000,    
+    total_timesteps = 20_000,
     learning_rate   = 3e-4,
-    n_steps         = 128,       
-    batch_size      = 64,       
+    n_steps         = 128,
+    batch_size      = 64,
     n_epochs        = 10,
     gamma           = 0.93,
     ent_coef        = 0.02,
     max_grad_norm   = 0.5,
     net_arch        = [128, 128],
-    checkpoint_freq = 2048,     # ~32 에피소드마다 저장
-    log_dir         = "./ppo_campus_log/",
-    ckpt_dir        = "./checkpoints/",
-    model_path      = "ppo_campus_robot",
-    vecnorm_path    = "ppo_campus_vecnormalize.pkl",
+    checkpoint_freq = 2048,
+    log_dir         = "./ppo_campus_log_v2/",
+    ckpt_dir        = "./checkpoints_v2/",
+    model_path      = "ppo_campus_robot_v2",
+    vecnorm_path    = "ppo_campus_vecnormalize_v2.pkl",
 )
 
 
@@ -49,9 +48,8 @@ CFG = dict(
 #  환경 팩토리
 # ─────────────────────────────────────────────────────────────
 def make_env():
-    """ActionMasker로 감싼 CampusEnv를 반환하는 팩토리."""
     def _init():
-        env = CampusEnv()
+        env = CampusEnvV2()
         env = ActionMasker(env, lambda e: e.action_masks())
         return env
     return _init
@@ -74,36 +72,31 @@ def save_all(model: MaskablePPO, env: VecNormalize):
 #  메인
 # ─────────────────────────────────────────────────────────────
 def main():
-    # rclpy.init()은 CampusEnv.__init__() 내부에서 처리됨 → 중복 불필요
-
-    # ── 환경 생성 ──────────────────────────────────────────
-    print("🌏 환경 초기화 중...")
+    print("🌏 환경 v2 초기화 중...")
     env = DummyVecEnv([make_env()])
     env = VecNormalize(
         env,
         norm_obs    = True,
         norm_reward = True,
-        clip_obs    = 20.0,   # dist 최대 60 기준, 10이면 정보 손실
+        clip_obs    = 20.0,
     )
 
-    # ── 콜백 ───────────────────────────────────────────────
     checkpoint_cb  = CheckpointCallback(
         save_freq         = CFG["checkpoint_freq"],
         save_path         = CFG["ckpt_dir"],
-        name_prefix       = "ppo_campus",
+        name_prefix       = "ppo_campus_v2",
         save_vecnormalize = True,
     )
     delivery_log_cb = DeliveryLogCallback()
 
-    # ── 모델 정의 ──────────────────────────────────────────
     if os.path.exists(CFG["model_path"] + ".zip"):
-        print("📂 기존 모델 로드 중...")
+        print("📂 기존 v2 모델 로드 중...")
         env = VecNormalize.load(CFG["vecnorm_path"], env.venv)
         env.training = True
         env.norm_reward = True
         model = MaskablePPO.load(CFG["model_path"], env=env)
     else:
-        print("🆕 새 모델 생성")
+        print("🆕 새 v2 모델 생성")
         model = MaskablePPO(
             "MlpPolicy",
             env,
@@ -119,16 +112,14 @@ def main():
             tensorboard_log = CFG["log_dir"],
         )
 
-    # ── 학습 ───────────────────────────────────────────────
-    print(f"🚀 강화학습 시작 (총 {CFG['total_timesteps']:,} 스텝)")
-    print("   ※ Nav2 한 스텝 ≈ 수십 초, 먼저 소규모로 파이프라인을 확인하세요.")
+    print(f"🚀 강화학습 v2 시작 (총 {CFG['total_timesteps']:,} 스텝)")
 
     try:
         model.learn(
-            total_timesteps = CFG["total_timesteps"],
-            callback        = [checkpoint_cb, delivery_log_cb],
-            progress_bar    = True,
-            reset_num_timesteps = False,  # 체크포인트 저장 시 timesteps 누적 유지
+            total_timesteps     = CFG["total_timesteps"],
+            callback            = [checkpoint_cb, delivery_log_cb],
+            progress_bar        = True,
+            reset_num_timesteps = False,
         )
         print("✅ 학습 완료!")
 

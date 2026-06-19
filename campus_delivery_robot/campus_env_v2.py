@@ -8,8 +8,8 @@ from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from gazebo_msgs.msg import ModelStates
-from gazebo_msgs.srv import SetEntityState  # [FIX] SetModelState → SetEntityState
-from gazebo_msgs.msg import EntityState      # [FIX] ModelState → EntityState
+from gazebo_msgs.srv import SetEntityState
+from gazebo_msgs.msg import EntityState
 from geometry_msgs.msg import Twist
 from nav2_msgs.srv import ClearEntireCostmap
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
@@ -17,17 +17,26 @@ from sb3_contrib.common.wrappers import ActionMasker
 
 
 # ─────────────────────────────────────────────
-#  상수 정의
+#  상수 정의 (v2: 배달지 6개)
 # ─────────────────────────────────────────────
 DELIVERY_POINTS = {
-    1: np.array([ 12.0, -16.5]),
-    2: np.array([-12.0, -16.5]),
-    3: np.array([-16.0,   3.0]),
-    4: np.array([ 16.0,   3.0]),
+    1: np.array([ 12.0, -16.5]),   # ECC
+    2: np.array([-12.0, -16.5]),   # 대강당
+    3: np.array([-16.0,   3.0]),   # 학관
+    4: np.array([ 16.0,   3.0]),   # 중앙도서관
+    5: np.array([  0.0,  12.0]),   # 연구협력관
+    6: np.array([ 18.0, -14.0]),   # 조형예술관
 }
-DELIVERY_NAMES   = {1: "ECC", 2: "대강당", 3: "학관", 4: "중앙도서관"}
-PICKUP_POINT     = np.array([0.0, -18.0])   # [FIX] -22.0 → -18.0 (맵 경계 여유)
-CHARGING_STATION = np.array([0.0,   0.0])   # world file pose: 0 0 0.05
+DELIVERY_NAMES = {
+    1: "ECC",
+    2: "대강당",
+    3: "학관",
+    4: "중앙도서관",
+    5: "연구협력관",
+    6: "조형예술관",
+}
+PICKUP_POINT     = np.array([0.0, -18.0])
+CHARGING_STATION = np.array([0.0,   0.0])
 
 MAX_STEPS               = 30
 BATTERY_DRAIN_PER_METER = 0.5
@@ -36,31 +45,31 @@ BATTERY_LOW_THRESHOLD   = 15.0
 BATTERY_FAIL_PENALTY    = 10.0
 COLLISION_DIST          = 0.5
 GOAL_DIST               = 2.5
-CHARGER_HALF_SIZE       = 3  # 충전소 박스 1.2m×1.2m의 절반 → AABB 판정
+CHARGER_HALF_SIZE       = 3
 NAV_RETRY_COUNT         = 3
 NAV_RETRY_DELAY         = 3.0
 NAV_TIMEOUT_SIM_SEC     = 120.0
 CONSEC_FAIL_LIMIT       = 3
-MAX_CARRY               = 2    # 정문에서 한 번에 받을 수 있는 최대 배달 수
+MAX_CARRY               = 2
 
 
 # ─────────────────────────────────────────────
-#  환경 클래스
+#  환경 클래스 (v2)
 # ─────────────────────────────────────────────
-class CampusEnv(gym.Env):
+class CampusEnvV2(gym.Env):
     """
-    캠퍼스 배달 로봇 환경 (ROS 2 + Nav2 + Gazebo)
+    캠퍼스 배달 로봇 환경 v2 (배달지 6개)
 
-    관측 (17차원):
+    관측 (21차원):
         [0-1]   robot_pos (x, y)          [2]     battery
-        [3-6]   delivered[1-4] (현 배치)  [7-10]  carrying[1-4]
-        [11-14] dist_to_delivery[1-4]     [15]    dist_to_charger
-        [16]    dist_to_pickup
+        [3-8]   delivered[1-6]            [9-14]  carrying[1-6]
+        [15-20] dist_to_delivery[1-6]     [21]    dist_to_charger
+        [22]    dist_to_pickup
 
-    행동 (Discrete 6):
-        0~3 → 배달지 1~4 로 이동 (carrying 중인 것만 허용)
-        4   → 정문으로 이동   (손이 비었을 때만 허용, 무한 배달)
-        5   → 충전소로 이동   (항상 허용)
+    행동 (Discrete 8):
+        0~5 → 배달지 1~6 로 이동 (carrying 중인 것만 허용)
+        6   → 정문으로 이동   (손이 비었을 때만 허용)
+        7   → 충전소로 이동   (항상 허용)
     """
 
     metadata = {"render_modes": []}
@@ -74,7 +83,7 @@ class CampusEnv(gym.Env):
         from rclpy.parameter import Parameter
 
         self.node = Node(
-            'campus_env_node',
+            'campus_env_v2_node',
             parameter_overrides=[
                 Parameter('use_sim_time', Parameter.Type.BOOL, True)
             ]
@@ -87,7 +96,6 @@ class CampusEnv(gym.Env):
         )
         self.executor_thread.start()
 
-        # ── Nav2 클라이언트 ───────────────────────────────
         self._nav2_client = ActionClient(
             self.node, NavigateToPose, 'navigate_to_pose'
         )
@@ -109,13 +117,11 @@ class CampusEnv(gym.Env):
 
         print("[ENV] ✅ Nav2 Action Server 연결 성공!")
 
-        # ── 토픽 / 서비스 ─────────────────────────────────
         self._states_lock = threading.Lock()
 
         self.model_states_sub = self.node.create_subscription(
             ModelStates, '/model_states', self._model_states_cb, 10
         )
-        # [FIX] SetModelState → SetEntityState
         self.set_state_client = self.node.create_client(
             SetEntityState, '/set_entity_state'
         )
@@ -132,41 +138,31 @@ class CampusEnv(gym.Env):
         )
         print("[ENV] ✅ 모든 클라이언트 / 퍼블리셔 생성 완료!")
 
-        # ── 상태 변수 ─────────────────────────────────────
-        self.robot_pos            = PICKUP_POINT.copy()
-        self.model_states         = None
-        self.battery              = 100.0
-        self.step_count           = 0
-        self.delivered            = {1: False, 2: False, 3: False, 4: False}
-        self.carrying             = {1: False, 2: False, 3: False, 4: False}
-        self.total_delivered      = 0    # 에피소드 내 누적 배달 수
-        self.consec_failures      = 0
-        self._last_nav_dist       = 0.0
+        self.robot_pos       = PICKUP_POINT.copy()
+        self.model_states    = None
+        self.battery         = 100.0
+        self.step_count      = 0
+        self.delivered       = {i: False for i in range(1, 7)}
+        self.carrying        = {i: False for i in range(1, 7)}
+        self.total_delivered = 0
+        self.consec_failures = 0
+        self._last_nav_dist  = 0.0
 
-        # ── 공간 정의 ─────────────────────────────────────
-        # action: 0~3=배달지1~4, 4=정문(픽업), 5=충전소
-        self.action_space = gym.spaces.Discrete(6)
+        # action: 0~5=배달지1~6, 6=정문, 7=충전소
+        self.action_space = gym.spaces.Discrete(8)
 
-        # obs 17-dim:
-        #   [0-1]   robot_pos        [2]     battery
-        #   [3-6]   delivered[1-4]   [7-10]  carrying[1-4]
-        #   [11-14] dist_to_delivery [15]    dist_to_charger
-        #   [16]    dist_to_pickup
+        # obs 23-dim
         self.observation_space = gym.spaces.Box(
             low=np.array(
-                [-25,-25,  0,  0,0,0,0,  0,0,0,0,  0,0,0,0,  0,  0],
+                [-30,-30,  0,  0,0,0,0,0,0,  0,0,0,0,0,0,  0,0,0,0,0,0,  0,  0],
                 dtype=np.float32
             ),
             high=np.array(
-                [ 25, 25,100,  1,1,1,1,  1,1,1,1, 60,60,60,60, 60, 60],
+                [ 30, 30,100,  1,1,1,1,1,1,  1,1,1,1,1,1, 80,80,80,80,80,80, 80, 80],
                 dtype=np.float32
             ),
             dtype=np.float32
         )
-
-    # ─────────────────────────────────────────────
-    #  콜백 / 내부 헬퍼
-    # ─────────────────────────────────────────────
 
     def _model_states_cb(self, msg):
         with self._states_lock:
@@ -185,18 +181,11 @@ class CampusEnv(gym.Env):
                 self.robot_pos = np.array([pos.x, pos.y])
                 break
 
-    # ─────────────────────────────────────────────
-    #  로봇 리셋
-    # ─────────────────────────────────────────────
-
     def _teleport_robot(self, x: float, y: float) -> bool:
-        """Gazebo 내 로봇을 (x, y)로 텔레포트. 성공 시 True."""
-        # [FIX] 타임아웃 10 → 30초
         if not self.set_state_client.wait_for_service(timeout_sec=30.0):
             print("[ENV] ❌ set_entity_state 서비스 없음 - 텔레포트 스킵")
             return False
 
-        # [FIX] ModelState → EntityState
         state = EntityState()
         state.name                   = 'turtlebot3_burger'
         state.pose.position.x        = float(x)
@@ -252,10 +241,6 @@ class CampusEnv(gym.Env):
         time.sleep(1.0)
         print("[ENV] 🗺️ Costmap 초기화 완료")
 
-    # ─────────────────────────────────────────────
-    #  네비게이션
-    # ─────────────────────────────────────────────
-
     def _clear_costmaps(self):
         for client in (self.clear_global_costmap_client, self.clear_local_costmap_client):
             if client.service_is_ready():
@@ -265,7 +250,7 @@ class CampusEnv(gym.Env):
     def _navigate_to(self, x: float, y: float) -> bool:
         print(f"[NAV] 목표=({x:.1f}, {y:.1f})")
 
-        self._clear_costmaps()  # 이전 goal의 stale costmap 제거
+        self._clear_costmaps()
 
         goal = NavigateToPose.Goal()
         goal.pose                    = PoseStamped()
@@ -299,7 +284,6 @@ class CampusEnv(gym.Env):
         result_future  = goal_handle.get_result_async()
         start_sim_time = self.node.get_clock().now()
 
-        # 실제 이동 경로 거리 누적 (직선 거리 오차 수정)
         self._parse_states()
         _track_pos = self.robot_pos.copy()
         self._last_nav_dist = 0.0
@@ -317,7 +301,6 @@ class CampusEnv(gym.Env):
 
         status = result_future.result().status
 
-        # 최종 위치 확정 및 목표까지 거리 계산
         self._parse_states()
         self._last_nav_dist += float(np.linalg.norm(self.robot_pos - _track_pos))
         dist_to_goal = float(np.linalg.norm(
@@ -328,33 +311,29 @@ class CampusEnv(gym.Env):
             print("[NAV] ✅ 도착 성공!")
             return True
         elif status == 6 and dist_to_goal < 2.0:
-            # [FIX] WSL2 성능 부족으로 BT tick rate 초과 → abort 리턴하지만
-            #       실제로는 목표 근처까지 도달한 경우 성공으로 처리
             print(f"[NAV] ⚠️ Status 6이지만 목표 근처 ({dist_to_goal:.1f}m) → 성공 처리")
             return True
         else:
             print(f"[NAV] ❌ 이동 실패 (Status: {status}, 거리: {dist_to_goal:.1f}m)")
             return False
 
-    # ─────────────────────────────────────────────
-    #  Gymnasium API
-    # ─────────────────────────────────────────────
-
     def action_masks(self) -> np.ndarray:
-        active_carries = sum(self.carrying[i] for i in range(1, 5))
-        hands_empty=active_carries == 0
+        active_carries = sum(self.carrying[i] for i in range(1, 7))
+        hands_empty = active_carries == 0
         return np.array([
-            self.carrying[1],            # 배달지1: 들고 있을 때만
-            self.carrying[2],            # 배달지2
-            self.carrying[3],            # 배달지3
-            self.carrying[4],            # 배달지4
-            hands_empty,            # 정문: 손이 비면 항상
-            True,                   # 충전소: 항상 (타이밍은 RL이 학습)
+            self.carrying[1],   # 배달지1
+            self.carrying[2],   # 배달지2
+            self.carrying[3],   # 배달지3
+            self.carrying[4],   # 배달지4
+            self.carrying[5],   # 배달지5
+            self.carrying[6],   # 배달지6
+            hands_empty,        # 정문
+            True,               # 충전소
         ], dtype=bool)
 
     def _get_obs(self) -> np.ndarray:
         dists        = [np.linalg.norm(self.robot_pos - DELIVERY_POINTS[i])
-                        for i in range(1, 5)]
+                        for i in range(1, 7)]
         dist_charger = np.linalg.norm(self.robot_pos - CHARGING_STATION)
         dist_pickup  = np.linalg.norm(self.robot_pos - PICKUP_POINT)
 
@@ -366,10 +345,14 @@ class CampusEnv(gym.Env):
             float(self.delivered[2]),
             float(self.delivered[3]),
             float(self.delivered[4]),
+            float(self.delivered[5]),
+            float(self.delivered[6]),
             float(self.carrying[1]),
             float(self.carrying[2]),
             float(self.carrying[3]),
             float(self.carrying[4]),
+            float(self.carrying[5]),
+            float(self.carrying[6]),
             *dists,
             dist_charger,
             dist_pickup,
@@ -378,12 +361,12 @@ class CampusEnv(gym.Env):
     def step(self, action: int):
         self.step_count += 1
 
-        if action in (0, 1, 2, 3):
-            target_id   = action + 1        # 1~4: 배달지
+        if action in range(6):
+            target_id   = action + 1        # 1~6: 배달지
             target_pos  = DELIVERY_POINTS[target_id]
             target_name = DELIVERY_NAMES[target_id]
-        elif action == 4:
-            target_id   = 0                 # 정문(픽업 포인트)
+        elif action == 6:
+            target_id   = 0                 # 정문
             target_pos  = PICKUP_POINT
             target_name = "정문"
         else:
@@ -391,17 +374,17 @@ class CampusEnv(gym.Env):
             target_pos  = CHARGING_STATION
             target_name = "충전소"
 
-        carrying_now = [i for i in range(1, 5) if self.carrying[i]]
+        carrying_now = [i for i in range(1, 7) if self.carrying[i]]
         print(f"\n[STEP {self.step_count}] action={action} → {target_name} "
               f"({target_pos[0]:.1f}, {target_pos[1]:.1f}) | "
               f"배터리={self.battery:.1f} | 배달중={carrying_now} | 누적={self.total_delivered}")
 
         nav_success = self._navigate_to(target_pos[0], target_pos[1])
 
-        time.sleep(1.0)  # Nav2 BT tree cleanup + costmap 안정화 대기
+        time.sleep(1.0)
         self._parse_states()
 
-        dist_traveled = self._last_nav_dist  # 실제 이동 경로 거리
+        dist_traveled = self._last_nav_dist
         self.battery -= dist_traveled * BATTERY_DRAIN_PER_METER
 
         if not nav_success:
@@ -409,8 +392,7 @@ class CampusEnv(gym.Env):
 
         self.battery = max(0.0, self.battery)
 
-        # 배달 nav 실패만 연속 실패로 카운트
-        if target_id in (1, 2, 3, 4):
+        if target_id in range(1, 7):
             if nav_success:
                 self.consec_failures = 0
             else:
@@ -424,10 +406,10 @@ class CampusEnv(gym.Env):
         if not nav_success:
             reward -= 5.0
 
-        reward -= dist_traveled * 0.3   # 비효율적 경로 억제 (scale 상향)
+        reward -= dist_traveled * 0.3
 
-        # ── 배달지 도착 ────────────────────────────────────
-        if target_id in (1, 2, 3, 4) and dist_to_target < GOAL_DIST:
+        # 배달지 도착
+        if target_id in range(1, 7) and dist_to_target < GOAL_DIST:
             if self.carrying[target_id]:
                 reward += 100.0
                 self.delivered[target_id] = True
@@ -435,14 +417,14 @@ class CampusEnv(gym.Env):
                 self.total_delivered      += 1
                 print(f"📦 배달 완료: {DELIVERY_NAMES[target_id]} (누적={self.total_delivered})")
 
-        # ── 정문 도착 → 새 배치 픽업 (무한 배달) ──────────
+        # 정문 도착 → 새 배치 픽업
         if target_id == 0 and dist_to_target < GOAL_DIST:
-            active_now = sum(self.carrying[i] for i in range(1, 5))
+            active_now = sum(self.carrying[i] for i in range(1, 7))
             if active_now == 0:
-                new_order = list(range(1, 5))
+                new_order = list(range(1, 7))
                 np.random.shuffle(new_order)
                 new_batch = new_order[:MAX_CARRY]
-                for d in range(1, 5):
+                for d in range(1, 7):
                     self.delivered[d] = False
                 for d in new_batch:
                     self.carrying[d] = True
@@ -451,7 +433,7 @@ class CampusEnv(gym.Env):
                 reward -= 10.0
                 print("⚠️ 불필요한 정문 방문")
 
-        # ── 충전소 도착 (AABB 네모 판정: 1.2m×1.2m 박스 안에 있어야 충전) ──
+        # 충전소 도착
         at_charger = (
             abs(self.robot_pos[0] - CHARGING_STATION[0]) < CHARGER_HALF_SIZE and
             abs(self.robot_pos[1] - CHARGING_STATION[1]) < CHARGER_HALF_SIZE
@@ -459,11 +441,10 @@ class CampusEnv(gym.Env):
         if target_id == -1 and at_charger:
             charged = min(BATTERY_CHARGE_AMOUNT, 100.0 - self.battery)
             self.battery += charged
-            # 충전량에 비례: 많이 필요할수록 고보상, 거의 안 찼으면 손해
             reward += charged * 0.3 - (100.0 - charged) * 0.05
             print(f"🔋 충전: +{charged:.1f} → 보상 {charged*0.3-(100.0-charged)*0.05:.1f}")
 
-        # 배터리 방전: 핵심 실패 (보행자 충돌은 Nav2가 담당 → 제거)
+        # 배터리 방전
         if self.battery <= 0:
             reward    -= 150.0
             terminated = True
@@ -482,15 +463,14 @@ class CampusEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.step_count           = 0
-        self.battery              = 100.0
-        self.delivered            = {1: False, 2: False, 3: False, 4: False}
-        self.carrying             = {1: False, 2: False, 3: False, 4: False}
-        self.total_delivered      = 0
-        self.consec_failures      = 0
+        self.step_count      = 0
+        self.battery         = 100.0
+        self.delivered       = {i: False for i in range(1, 7)}
+        self.carrying        = {i: False for i in range(1, 7)}
+        self.total_delivered = 0
+        self.consec_failures = 0
 
-        # 정문에서 시작 → 첫 배치 즉시 픽업 (무한 루프형)
-        order = [1, 2, 3, 4]
+        order = list(range(1, 7))
         np.random.shuffle(order)
         first_batch = order[:MAX_CARRY]
         for d in first_batch:
@@ -525,10 +505,7 @@ class CampusEnv(gym.Env):
             print("🛑 rclpy shutdown complete.")
 
 
-# ─────────────────────────────────────────────
-#  엔트리포인트
-# ─────────────────────────────────────────────
 if __name__ == '__main__':
-    env = DummyVecEnv([lambda: ActionMasker(CampusEnv(), lambda e: e.action_masks())])
+    env = DummyVecEnv([lambda: ActionMasker(CampusEnvV2(), lambda e: e.action_masks())])
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
-    print("✅ 환경 세팅 완료")
+    print("✅ 환경 v2 세팅 완료")

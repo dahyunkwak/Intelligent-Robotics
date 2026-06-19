@@ -37,7 +37,7 @@
       </link>
     </model>
 
-    <!-- 배달 수령 지점 (정문 기둥 사이) -->
+    <!-- 배달 수령 지점 (정문) -->
     <model name="delivery_point_gate">
       <static>true</static>
       <pose>0 -22 0.05 0 0 0</pose>
@@ -49,7 +49,7 @@
       </link>
     </model>
 
-    <!-- ECC (정문 기준 오른편, 가까운 곳) -->
+    <!-- ECC -->
     <model name="ECC">
       <static>true</static>
       <pose>12 -8 3 0 0 0</pose>
@@ -64,7 +64,7 @@
       </link>
     </model>
 
-    <!-- 대강당 (ECC 반대편, 왼쪽) -->
+    <!-- 대강당 -->
     <model name="auditorium">
       <static>true</static>
       <pose>-12 -8 3 0 0 0</pose>
@@ -79,7 +79,7 @@
       </link>
     </model>
 
-    <!-- 학관 (뒤편 왼쪽) -->
+    <!-- 학관 -->
     <model name="hakgwan">
       <static>true</static>
       <pose>-16 10 2.5 0 0 0</pose>
@@ -94,7 +94,7 @@
       </link>
     </model>
 
-    <!-- 중앙도서관 (뒤편 오른쪽) -->
+    <!-- 중앙도서관 -->
     <model name="central_library">
       <static>true</static>
       <pose>16 10 2.5 0 0 0</pose>
@@ -109,10 +109,10 @@
       </link>
     </model>
 
-    <!-- 충전소 (캠퍼스 중앙 — 모든 건물과 균등 거리) -->
+    <!-- 충전소 (v3: 맵 북서쪽 외딴 곳) -->
     <model name="charging_station">
       <static>true</static>
-      <pose>0 0 0.05 0 0 0</pose>
+      <pose>16 -20 0.05 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry><box><size>1.2 1.2 0.1</size></box></geometry>

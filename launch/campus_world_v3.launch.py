@@ -9,24 +9,23 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────
 #  타이밍 상수 (WSL2 환경에 맞게 조정)
 # ─────────────────────────────────────────────────────────────
-GAZEBO_STARTUP_DELAY = 12.0   # Gazebo 완전히 뜰 때까지 대기 (초)
-NAV2_STARTUP_DELAY   = 22.0   # 로봇 스폰 완료 후 Nav2 시작
-GT_POSE_DELAY        = 25.0   # Nav2 뜬 후 gt_pose_publisher 시작
- 
- 
+GAZEBO_STARTUP_DELAY = 12.0
+NAV2_STARTUP_DELAY   = 22.0
+GT_POSE_DELAY        = 25.0
+
+
 def generate_launch_description():
- 
-    # ── 패키지 경로 ────────────────────────────────────────
+
     pkg_path          = get_package_share_directory('campus_delivery_robot')
     turtlebot3_gazebo = get_package_share_directory('turtlebot3_gazebo')
     nav2_bringup_dir  = get_package_share_directory('nav2_bringup')
- 
-    world_file  = os.path.join(pkg_path, 'worlds', 'campus.world')
+
+    world_file  = os.path.join(pkg_path, 'worlds', 'campus_world_v3.world')
     nav2_params = os.path.join(pkg_path, 'config', 'nav2_params.yaml')
     map_file    = os.path.join(pkg_path, 'maps',   'campus_map.yaml')
     urdf_file   = os.path.join(
@@ -36,7 +35,7 @@ def generate_launch_description():
     robot_sdf   = os.path.join(
         turtlebot3_gazebo, 'models', 'turtlebot3_burger', 'model.sdf'
     )
- 
+
     try:
         robot_desc = xacro.process_file(urdf_file).toxml()
     except Exception as e:
@@ -44,14 +43,13 @@ def generate_launch_description():
             f"[LAUNCH] ❌ URDF xacro 처리 실패: {e}\n"
             f"  파일: {urdf_file}"
         )
- 
+
     return LaunchDescription([
- 
-        # ── 환경 변수 ────────────────────────────────────────
+
         SetEnvironmentVariable('TURTLEBOT3_MODEL',      'burger'),
         SetEnvironmentVariable('LIBGL_ALWAYS_SOFTWARE', '1'),
- 
-        # ── 1단계: Gazebo 실행 ───────────────────────────────
+
+        # 1단계: Gazebo 실행
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(
@@ -61,8 +59,8 @@ def generate_launch_description():
             ),
             launch_arguments={'world': world_file}.items(),
         ),
- 
-        # ── 2단계: 로봇 스폰 + RSP ───────────────────────────
+
+        # 2단계: 로봇 스폰 + RSP
         TimerAction(
             period=GAZEBO_STARTUP_DELAY,
             actions=[
@@ -73,7 +71,7 @@ def generate_launch_description():
                         '-entity', 'turtlebot3_burger',
                         '-file',   robot_sdf,
                         '-x', '0.0',
-                        '-y', '-18.0',   # [FIX] -22.0 → -18.0 (맵 경계 여유)
+                        '-y', '-18.0',
                         '-z', '0.01',
                     ],
                     output='screen',
@@ -90,10 +88,8 @@ def generate_launch_description():
                 ),
             ],
         ),
- 
-        # ── 3단계: Nav2 (AMCL 제거 → gt_pose_publisher가 map→odom TF 단독 담당)
-        # bringup_launch.py(AMCL 포함) 대신 map_server + navigation_launch.py만 사용
-        # → AMCL이 map→odom TF를 발행하지 않으므로 gt_pose_publisher와 TF 충돌 없음
+
+        # 3단계: Nav2
         TimerAction(
             period=NAV2_STARTUP_DELAY,
             actions=[
@@ -132,10 +128,8 @@ def generate_launch_description():
                 ),
             ],
         ),
- 
-        # ── 4단계: Ground-truth 위치 퍼블리셔 ────────────────
-        # [NEW] AMCL 대신 Gazebo ground-truth 위치를 /amcl_pose로 퍼블리시
-        #       → Nav2가 항상 정확한 로봇 위치를 알 수 있음
+
+        # 4단계: Ground-truth 위치 퍼블리셔
         TimerAction(
             period=GT_POSE_DELAY,
             actions=[
